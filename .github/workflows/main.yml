@@ -17,21 +17,25 @@ jobs:
 
       - name: Fix deprecated TensorFlow version
         run: |
-          # Заменяем удаленную nightly версию на стабильную 2.5.0, которая еще доступна
-          sed -i 's/0.0.0-nightly/2.5.0/g' ESP32CamAI_android/app/build.gradle
-          # Добавляем необходимые репозитории
-          sed -i "s/google()/google()\n        mavenCentral()/g" ESP32CamAI_android/build.gradle
+          # Ищем все build.gradle и заменяем версию TensorFlow
+          find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
+          # Добавляем mavenCentral во все файлы сборки, если его там нет
+          find . -name "build.gradle" -exec sed -i "s/google()/google()\n        mavenCentral()/g" {} +
 
       - name: Grant execute permission for gradlew
-        run: chmod +x ESP32CamAI_android/gradlew
+        run: |
+          # Ищем gradlew и даем ему права на запуск
+          find . -name "gradlew" -exec chmod +x {} +
 
       - name: Build APK
         run: |
-          cd ESP32CamAI_android
+          # Переходим в папку, где лежит gradlew, и запускаем сборку
+          GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
+          cd $GRADLE_PATH
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: esp32-cam-ai-debug
-          path: ESP32CamAI_android/app/build/outputs/apk/debug/*.apk
+          path: "**/*.apk"
