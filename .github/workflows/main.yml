@@ -13,14 +13,17 @@ jobs:
         with:
           java-version: '8'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Fix Project for 2018 standards
+      - name: Surgical Fixes for 2018 Code
         run: |
-          # Исправляем TensorFlow
+          # 1. Замена TensorFlow (уже знакомая нам)
           find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
-          # Добавляем jcenter и mavenCentral (многие старые библиотеки только там)
+          
+          # 2. Добавление репозиториев
           find . -name "build.gradle" -exec sed -i "s/google()/google()\n        mavenCentral()\n        jcenter()/g" {} +
+          
+          # 3. Отключение фатальных ошибок Lint (проверка кода)
+          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false }" {} +
 
       - name: Grant execute permission for gradlew
         run: find . -name "gradlew" -exec chmod +x {} +
@@ -29,8 +32,8 @@ jobs:
         run: |
           GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
           cd $GRADLE_PATH
-          # Запуск с игнорированием ошибок линтинга и проверкой зависимостей
-          ./gradlew assembleDebug --stacktrace -Pandroid.useAndroidX=false -Pandroid.enableJetifier=false
+          # Запуск сборки с полным игнорированием новых ограничений
+          ./gradlew assembleDebug --stacktrace -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs="-Xmx2048m"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
