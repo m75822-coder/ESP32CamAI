@@ -15,6 +15,13 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Fix deprecated TensorFlow version
+        run: |
+          # Заменяем удаленную nightly версию на стабильную 2.5.0, которая еще доступна
+          sed -i 's/0.0.0-nightly/2.5.0/g' ESP32CamAI_android/app/build.gradle
+          # Добавляем необходимые репозитории
+          sed -i "s/google()/google()\n        mavenCentral()/g" ESP32CamAI_android/build.gradle
+
       - name: Grant execute permission for gradlew
         run: chmod +x ESP32CamAI_android/gradlew
 
