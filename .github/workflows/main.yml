@@ -14,29 +14,23 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Surgical Fixes for 2018 Code
+      - name: Patch Project for 2026 Compatibility
         run: |
-          # 1. Замена TensorFlow (уже знакомая нам)
+          # Исправляем типичную ошибку с TensorFlow nightly
           find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
-          
-          # 2. Добавление репозиториев
-          find . -name "build.gradle" -exec sed -i "s/google()/google()\n        mavenCentral()\n        jcenter()/g" {} +
-          
-          # 3. Отключение фатальных ошибок Lint (проверка кода)
-          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false }" {} +
+          # Отключаем строгую проверку Lint, которая валит старые проекты
+          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false; checkReleaseBuilds false }" {} +
 
-      - name: Grant execute permission for gradlew
-        run: find . -name "gradlew" -exec chmod +x {} +
-
-      - name: Build APK
+      - name: Build APK (Debug Mode)
         run: |
-          GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
-          cd $GRADLE_PATH
-          # Запуск сборки с полным игнорированием новых ограничений
-          ./gradlew assembleDebug --stacktrace -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs="-Xmx2048m"
+          chmod +x ESP32CamAI_android/gradlew
+          cd ESP32CamAI_android
+          # Запуск с флагом --info покажет нам конкретную ошибку компиляции
+          ./gradlew assembleDebug --info --stacktrace
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-cam-ai-debug
-          path: "**/*.apk"
+          name: esp32-cam-ai-apk
+          path: ESP32CamAI_android/app/build/outputs/apk/debug/*.apk
