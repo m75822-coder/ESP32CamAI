@@ -16,30 +16,37 @@ jobs:
 
       - name: Fix Java Code and Dependencies
         run: |
-          # 1. Принудительный перевод на AndroidX
+          # 1. Принудительный перевод на AndroidX и включение Jetifier
+          # Это необходимо для совместимости старых библиотек с новыми окружениями
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # 2. Добавляем репозитории-архивы для старых библиотек
+          # 2. Добавляем архивные репозитории (JCenter и MavenCentral) ПЕРЕД Google
+          # Чтобы Gradle мог найти старые версии библиотек, которые Google удалил
           find . -name "build.gradle" -exec sed -i "s/repositories {/repositories {\n        mavenCentral()\n        jcenter()\n        google()/g" {} +
           
-          # 3. ИСПРАВЛЕНИЕ NNAPI: заменяем вызов метода на комментарий
-          # Это решит ошибку "cannot find symbol: method setUseNNAPI"
+          # 3. ЗАМЕНА TENSORFLOW: Меняем несуществующую nightly-версию на стабильную 2.5.0
+          find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
+          
+          # 4. ИСПРАВЛЕНИЕ NNAPI: Комментируем вызов метода setUseNNAPI(isChecked)
+          # Этот метод отсутствует в новых версиях Interpreter, что вызывало ошибку компиляции
           find . -name "*.java" -exec sed -i 's/\(.*\.setUseNNAPI(isChecked);\)/\/\/ \1/g' {} +
           
-          # 4. Отключаем строгие проверки Lint
+          # 5. Отключаем строгие проверки Lint, чтобы сборка не падал из-за предупреждений
           find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false; checkReleaseBuilds false }" {} +
 
       - name: Build APK
         run: |
-          # Автоматический поиск и запуск сборки
+          # Автоматический поиск файла gradlew в структуре проекта
           GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
           cd $GRADLE_PATH
           chmod +x gradlew
+          # Запуск сборки без демона для экономии памяти и с очисткой кэша
           ./gradlew clean assembleDebug --no-daemon
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-cam-ai-fixed
+          name: esp32-cam-ai-final-apk
           path: "**/*.apk"
