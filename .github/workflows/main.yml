@@ -14,35 +14,35 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Global Fix (Libraries & Java & NDK)
+      - name: Global Project Fix
         run: |
-          # 1. Исправляем репозитории и включаем AndroidX
+          # 1. Включаем AndroidX и Jetifier для совместимости
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          
+          # 2. Добавляем архивные репозитории во все файлы проекта
           find . -name "build.gradle" -exec sed -i "s/repositories {/repositories {\n        mavenCentral()\n        jcenter()\n        google()/g" {} +
           
-          # 2. Исправляем TensorFlow (nightly -> 2.5.0)
+          # 3. Фикс TensorFlow: заменяем удаленную nightly на стабильную 2.5.0
           find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
           
-          # 3. Фикс кода Java (NNAPI ошибка)
+          # 4. Фикс кода Java: комментируем вызов NNAPI, который ломает сборку
           find . -name "*.java" -exec sed -i 's/\(.*\.setUseNNAPI(isChecked);\)/\/\/ \1/g' {} +
           
-          # 4. ФИКС NDK (Ошибка 'No toolchains found'):
-          # Заставляем Gradle игнорировать отсутствие старых тулчейнов и не стрипать символы
+          # 5. ФИКС NDK: запрещаем Gradle искать старые тулчейны и удалять символы из библиотек OpenCV
           find . -name "build.gradle" -exec sed -i "/android {/a \    packagingOptions { doNotStrip '*/armeabi-v7a/*.so'; doNotStrip '*/arm64-v8a/*.so' }\n    lintOptions { abortOnError false }" {} +
 
       - name: Build APK
         run: |
-          # Находим путь к папке с gradlew
+          # Динамический поиск gradlew и запуск сборки
           GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
           cd $GRADLE_PATH
           chmod +x gradlew
-          # Собираем APK, игнорируя проверку NDK через флаг
           ./gradlew clean assembleDebug --no-daemon -Pandroid.keepResourceNames=true
-          
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-cam-ai-build
+          name: esp32-cam-ai-ready
           path: "**/*.apk"
