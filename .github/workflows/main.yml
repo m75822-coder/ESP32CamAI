@@ -14,39 +14,40 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Fix Java Code and Dependencies
+      - name: Setup Android NDK
+        uses: android-actions/setup-android@v3
+        with:
+          ndk-version: '21.4.7075529' # Стабильная версия для старых проектов
+
+      - name: Global Project Fix
         run: |
-          # 1. Принудительный перевод на AndroidX и включение Jetifier
-          # Это необходимо для совместимости старых библиотек с новыми окружениями
+          # 1. Включаем AndroidX и Jetifier
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # 2. Добавляем архивные репозитории (JCenter и MavenCentral) ПЕРЕД Google
-          # Чтобы Gradle мог найти старые версии библиотек, которые Google удалил
+          # 2. Массовая замена репозиториев во всех build.gradle файлах
           find . -name "build.gradle" -exec sed -i "s/repositories {/repositories {\n        mavenCentral()\n        jcenter()\n        google()/g" {} +
           
-          # 3. ЗАМЕНА TENSORFLOW: Меняем несуществующую nightly-версию на стабильную 2.5.0
+          # 3. Исправляем TensorFlow: nightly -> 2.5.0
           find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
           
-          # 4. ИСПРАВЛЕНИЕ NNAPI: Комментируем вызов метода setUseNNAPI(isChecked)
-          # Этот метод отсутствует в новых версиях Interpreter, что вызывало ошибку компиляции
+          # 4. Исправляем код Java (NNAPI fix)
           find . -name "*.java" -exec sed -i 's/\(.*\.setUseNNAPI(isChecked);\)/\/\/ \1/g' {} +
           
-          # 5. Отключаем строгие проверки Lint, чтобы сборка не падал из-за предупреждений
-          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false; checkReleaseBuilds false }" {} +
+          # 5. Подавляем ошибки NDK и Lint
+          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false; checkReleaseBuilds false }\n    packagingOptions { doNotStrip '*/armeabi-v7a/*.so'; doNotStrip '*/arm64-v8a/*.so' }" {} +
 
       - name: Build APK
         run: |
-          # Автоматический поиск файла gradlew в структуре проекта
+          # Ищем gradlew и запускаем сборку
           GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
           cd $GRADLE_PATH
           chmod +x gradlew
-          # Запуск сборки без демона для экономии памяти и с очисткой кэша
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew clean assembleDebug --no-daemon -Pandroid.keepResourceNames=true
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-cam-ai-final-apk
+          name: esp32-cam-ai-ready
           path: "**/*.apk"
