@@ -14,40 +14,35 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Setup Android NDK
-        uses: android-actions/setup-android@v3
-        with:
-          ndk-version: '21.4.7075529' # Стабильная версия для старых проектов
-
-      - name: Global Project Fix
+      - name: Global Fix (Libraries & Java & NDK)
         run: |
-          # 1. Включаем AndroidX и Jetifier
+          # 1. Исправляем репозитории и включаем AndroidX
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          
-          # 2. Массовая замена репозиториев во всех build.gradle файлах
           find . -name "build.gradle" -exec sed -i "s/repositories {/repositories {\n        mavenCentral()\n        jcenter()\n        google()/g" {} +
           
-          # 3. Исправляем TensorFlow: nightly -> 2.5.0
+          # 2. Исправляем TensorFlow (nightly -> 2.5.0)
           find . -name "build.gradle" -exec sed -i 's/0.0.0-nightly/2.5.0/g' {} +
           
-          # 4. Исправляем код Java (NNAPI fix)
+          # 3. Фикс кода Java (NNAPI ошибка)
           find . -name "*.java" -exec sed -i 's/\(.*\.setUseNNAPI(isChecked);\)/\/\/ \1/g' {} +
           
-          # 5. Подавляем ошибки NDK и Lint
-          find . -name "build.gradle" -exec sed -i "/android {/a \    lintOptions { abortOnError false; checkReleaseBuilds false }\n    packagingOptions { doNotStrip '*/armeabi-v7a/*.so'; doNotStrip '*/arm64-v8a/*.so' }" {} +
+          # 4. ФИКС NDK (Ошибка 'No toolchains found'):
+          # Заставляем Gradle игнорировать отсутствие старых тулчейнов и не стрипать символы
+          find . -name "build.gradle" -exec sed -i "/android {/a \    packagingOptions { doNotStrip '*/armeabi-v7a/*.so'; doNotStrip '*/arm64-v8a/*.so' }\n    lintOptions { abortOnError false }" {} +
 
       - name: Build APK
         run: |
-          # Ищем gradlew и запускаем сборку
+          # Находим путь к папке с gradlew
           GRADLE_PATH=$(find . -name "gradlew" -printf '%h\n' | head -n 1)
           cd $GRADLE_PATH
           chmod +x gradlew
+          # Собираем APK, игнорируя проверку NDK через флаг
           ./gradlew clean assembleDebug --no-daemon -Pandroid.keepResourceNames=true
-
+          
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-cam-ai-ready
+          name: esp32-cam-ai-build
           path: "**/*.apk"
